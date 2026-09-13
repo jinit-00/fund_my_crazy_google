@@ -22,57 +22,63 @@ import {
 import type { RouteOption, AppMode } from '../types';
 import { Eye, EyeOff, Droplets } from 'lucide-react';
 
-// High-fidelity, zero-watermark OpenStreetMap raster styles (100% free, no API key, no watermark)
-const MAP_DARK_STYLE: StyleSpecification = {
+// High-fidelity, zero-API-key basemap styles (100% free, zero rate-limits, zero watermarks)
+const CARTO_DARK_STYLE: StyleSpecification = {
   version: 8,
   glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
-    'osm-dark-tiles': {
+    'esri-dark-base-source': {
       type: 'raster',
       tiles: [
-        'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors, Tiles style by Humanitarian OpenStreetMap Team',
+      attribution: '&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
+    },
+    'esri-dark-ref-source': {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
     },
   },
   layers: [
     {
-      id: 'osm-dark-base',
+      id: 'dark-base-layer',
       type: 'raster',
-      source: 'osm-dark-tiles',
+      source: 'esri-dark-base-source',
       minzoom: 0,
       maxzoom: 20,
-      paint: {
-        'raster-brightness-max': 0.55,
-        'raster-brightness-min': 0.05,
-        'raster-contrast': 0.35,
-        'raster-saturation': -0.75,
-      },
+    },
+    {
+      id: 'dark-ref-layer',
+      type: 'raster',
+      source: 'esri-dark-ref-source',
+      minzoom: 0,
+      maxzoom: 20,
     },
   ],
 };
 
-const MAP_LIGHT_STYLE: StyleSpecification = {
+const CARTO_LIGHT_STYLE: StyleSpecification = {
   version: 8,
   glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
-    'osm-light-tiles': {
+    'esri-street-source': {
       type: 'raster',
       tiles: [
-        'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors, Tiles style by Humanitarian OpenStreetMap Team',
+      attribution: '&copy; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors',
     },
   },
   layers: [
     {
-      id: 'osm-light-base',
+      id: 'light-street-base',
       type: 'raster',
-      source: 'osm-light-tiles',
+      source: 'esri-street-source',
       minzoom: 0,
       maxzoom: 20,
     },
@@ -433,7 +439,7 @@ export const MapViewport: React.FC = () => {
     if (!mapContainerRef.current) return;
     let isCancelled = false;
 
-    const initialStyle = mode === 'day' ? MAP_LIGHT_STYLE : MAP_DARK_STYLE;
+    const initialStyle = mode === 'day' ? CARTO_LIGHT_STYLE : CARTO_DARK_STYLE;
     prevModeRef.current = mode;
 
     const map = new Map({
@@ -679,7 +685,7 @@ export const MapViewport: React.FC = () => {
           });
         }
       } else {
-        const targetStyle = mode === 'day' ? MAP_LIGHT_STYLE : MAP_DARK_STYLE;
+        const targetStyle = mode === 'day' ? CARTO_LIGHT_STYLE : CARTO_DARK_STYLE;
         map.setStyle(targetStyle);
         map.once('style.load', () => {
           setupMapLayers(map, mode);
