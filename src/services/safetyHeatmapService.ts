@@ -28,7 +28,7 @@ const DELHI_HUBS: {
   { name: 'Khan Market Pedestrian Precinct', coord: [77.2270, 28.6003], baseLighting: 94, baseIncident: 94, baseFootTraffic: 88, radiusMeters: 1100 },
   { name: 'Chandni Chowk Heritage Promenade', coord: [77.2301, 28.6506], baseLighting: 88, baseIncident: 82, baseFootTraffic: 95, radiusMeters: 1200 },
   { name: 'Red Fort & Netaji Subhash Marg', coord: [77.2410, 28.6562], baseLighting: 90, baseIncident: 86, baseFootTraffic: 90, radiusMeters: 1200 },
-  { name: 'Gurudwara Bangla Sahib Promenade', coord: [77.2090, 28.6264], baseLighting: 92, baseIncident: 90, baseFootTraffic: 86, radiusMeters: 800 },
+  { name: 'Bangla Sahib Public Promenade', coord: [77.2090, 28.6264], baseLighting: 92, baseIncident: 90, baseFootTraffic: 86, radiusMeters: 800 },
   { name: 'Sansad Marg & Central Secretariat', coord: [77.2050, 28.6180], baseLighting: 96, baseIncident: 98, baseFootTraffic: 72, radiusMeters: 1500 },
   { name: 'Chanakyapuri Diplomatic Enclave', coord: [77.1850, 28.5950], baseLighting: 95, baseIncident: 97, baseFootTraffic: 65, radiusMeters: 1800 },
   { name: 'Karol Bagh Commercial Avenue', coord: [77.1900, 28.6500], baseLighting: 86, baseIncident: 78, baseFootTraffic: 92, radiusMeters: 1300 },

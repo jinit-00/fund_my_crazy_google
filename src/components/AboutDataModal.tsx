@@ -95,7 +95,7 @@ export const AboutDataModal: React.FC = () => {
                   5. Free Water Huts & Traditional Pyaau Shelters
                 </span>
                 <p className={`text-[11px] mt-0.5 leading-relaxed ${isNight ? 'text-[#8a92a3]' : 'text-slate-600'}`}>
-                  Roadside drinking water points, earthen matka pavilions, and water kiosks sourced from OpenStreetMap (<code>amenity=drinking_water</code>) and verified civic/NGO Pyaaus (Delhi Jal Board, NDMC, Gurudwara Seva trusts). Saturated blue dots provide critical summer heat relief across Delhi.
+                  Roadside drinking water points, earthen matka pavilions, and water kiosks sourced from OpenStreetMap (<code>amenity=drinking_water</code>) and verified civic/NGO Pyaaus (Delhi Jal Board, NDMC, Community trusts). Saturated blue dots provide critical summer heat relief across Delhi.
                 </p>
               </div>
             </div>

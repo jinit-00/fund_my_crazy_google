@@ -85,8 +85,8 @@ export const DELHI_LANDMARKS: LocationPoint[] = [
   },
   {
     id: 'bangla-sahib',
-    name: 'Gurudwara Bangla Sahib (Promenade)',
-    description: 'Prominent 24/7 historic community sanctuary on Baba Kharak Singh Marg',
+    name: 'Bangla Sahib Public Promenade',
+    description: 'Prominent 24/7 historic community promenade on Baba Kharak Singh Marg',
     coordinates: [77.2090, 28.6264],
     category: 'landmark',
     popularStartOrEnd: true,

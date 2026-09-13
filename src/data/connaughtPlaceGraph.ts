@@ -138,7 +138,7 @@ export const GRAPH_NODES: Record<string, GraphNode> = {
   },
   'n-bangla-sahib': {
     id: 'n-bangla-sahib',
-    name: 'Gurudwara Bangla Sahib Gates',
+    name: 'Bangla Sahib West Gate Promenade',
     coordinates: [77.2090, 28.6264]
   },
   // Isolated / Back-Alley Nodes (Realistic lower lighting & isolation)
