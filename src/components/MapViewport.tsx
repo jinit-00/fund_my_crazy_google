@@ -22,63 +22,57 @@ import {
 import type { RouteOption, AppMode } from '../types';
 import { Eye, EyeOff, Droplets } from 'lucide-react';
 
-// High-fidelity, zero-API-key basemap styles (100% free, zero rate-limits, zero watermarks)
-const CARTO_DARK_STYLE: StyleSpecification = {
+// OpenFreeMap vector styles (Zero API key required)
+const OPENFREEMAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const OPENFREEMAP_DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark';
+
+// Offline-resilient raster fallback styles
+const FALLBACK_DARK_STYLE: StyleSpecification = {
   version: 8,
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
-    'esri-dark-base-source': {
+    'carto-dark': {
       type: 'raster',
       tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
       ],
       tileSize: 256,
-      attribution: '&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
-    },
-    'esri-dark-ref-source': {
-      type: 'raster',
-      tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-      ],
-      tileSize: 256,
+      attribution: '&copy; CARTO &copy; OpenStreetMap contributors',
     },
   },
   layers: [
     {
-      id: 'dark-base-layer',
+      id: 'carto-dark-layer',
       type: 'raster',
-      source: 'esri-dark-base-source',
-      minzoom: 0,
-      maxzoom: 20,
-    },
-    {
-      id: 'dark-ref-layer',
-      type: 'raster',
-      source: 'esri-dark-ref-source',
+      source: 'carto-dark',
       minzoom: 0,
       maxzoom: 20,
     },
   ],
 };
 
-const CARTO_LIGHT_STYLE: StyleSpecification = {
+const FALLBACK_LIGHT_STYLE: StyleSpecification = {
   version: 8,
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
-    'esri-street-source': {
+    'carto-light': {
       type: 'raster',
       tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        'https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
       ],
       tileSize: 256,
-      attribution: '&copy; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors',
+      attribution: '&copy; CARTO &copy; OpenStreetMap contributors',
     },
   },
   layers: [
     {
-      id: 'light-street-base',
+      id: 'carto-light-layer',
       type: 'raster',
-      source: 'esri-street-source',
+      source: 'carto-light',
       minzoom: 0,
       maxzoom: 20,
     },
@@ -129,214 +123,190 @@ export const MapViewport: React.FC = () => {
     const isNightMode = currentMode === 'night' || currentMode === 'heatmap';
 
     // 1. Add OSM 3D Building Extrusions across Delhi if openmaptiles vector source exists
-    try {
-      if (map.getSource('openmaptiles') && !map.getLayer('3d-buildings-osm')) {
-        const layers = map.getStyle()?.layers || [];
-        let firstSymbolId: string | undefined;
-        for (const layer of layers) {
-          if (layer.type === 'symbol') {
-            firstSymbolId = layer.id;
-            break;
-          }
+    if (map.getSource('openmaptiles') && !map.getLayer('3d-buildings-osm')) {
+      const layers = map.getStyle().layers || [];
+      let firstSymbolId: string | undefined;
+      for (const layer of layers) {
+        if (layer.type === 'symbol') {
+          firstSymbolId = layer.id;
+          break;
         }
-
-        const buildingColors = isNightMode
-          ? [
-              'interpolate',
-              ['linear'],
-              ['coalesce', ['get', 'render_height'], 12],
-              0, '#1c1f26',
-              20, '#232832',
-              50, '#2b333f',
-              100, '#384252',
-            ]
-          : [
-              'interpolate',
-              ['linear'],
-              ['coalesce', ['get', 'render_height'], 12],
-              0, '#e2e8f0',
-              20, '#cbd5e1',
-              50, '#94a3b8',
-              100, '#64748b',
-            ];
-
-        map.addLayer(
-          {
-            id: '3d-buildings-osm',
-            source: 'openmaptiles',
-            'source-layer': 'building',
-            type: 'fill-extrusion',
-            minzoom: 13,
-            paint: {
-              'fill-extrusion-color': buildingColors as any,
-              'fill-extrusion-height': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                13, 0,
-                13.5, ['coalesce', ['get', 'render_height'], 12],
-              ],
-              'fill-extrusion-base': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                13, 0,
-                13.5, ['coalesce', ['get', 'render_min_height'], 0],
-              ],
-              'fill-extrusion-opacity': isNightMode ? 0.85 : 0.75,
-            },
-          },
-          firstSymbolId
-        );
       }
-    } catch (e) {
-      console.warn('OSM 3d buildings layer setup skipped:', e);
+
+      const buildingColors = isNightMode
+        ? [
+            'interpolate',
+            ['linear'],
+            ['coalesce', ['get', 'render_height'], 12],
+            0, '#1c1f26',
+            20, '#232832',
+            50, '#2b333f',
+            100, '#384252',
+          ]
+        : [
+            'interpolate',
+            ['linear'],
+            ['coalesce', ['get', 'render_height'], 12],
+            0, '#e2e8f0',
+            20, '#cbd5e1',
+            50, '#94a3b8',
+            100, '#64748b',
+          ];
+
+      map.addLayer(
+        {
+          id: '3d-buildings-osm',
+          source: 'openmaptiles',
+          'source-layer': 'building',
+          type: 'fill-extrusion',
+          minzoom: 13,
+          paint: {
+            'fill-extrusion-color': buildingColors as any,
+            'fill-extrusion-height': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              13, 0,
+              13.5, ['coalesce', ['get', 'render_height'], 12],
+            ],
+            'fill-extrusion-base': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              13, 0,
+              13.5, ['coalesce', ['get', 'render_min_height'], 0],
+            ],
+            'fill-extrusion-opacity': isNightMode ? 0.85 : 0.75,
+          },
+        },
+        firstSymbolId
+      );
     }
 
     // 2. Add Connaught Place High-Precision 3D Extrusions (Blocks A-F & Central Towers)
-    try {
-      if (!map.getSource('cp-3d-buildings')) {
-        map.addSource('cp-3d-buildings', {
-          type: 'geojson',
-          data: CONNAUGHT_PLACE_3D_BUILDINGS,
-        });
-      }
+    if (!map.getSource('cp-3d-buildings')) {
+      map.addSource('cp-3d-buildings', {
+        type: 'geojson',
+        data: CONNAUGHT_PLACE_3D_BUILDINGS,
+      });
+    }
 
-      if (!map.getLayer('cp-3d-buildings-layer')) {
-        map.addLayer({
-          id: 'cp-3d-buildings-layer',
-          type: 'fill-extrusion',
-          source: 'cp-3d-buildings',
-          paint: {
-            'fill-extrusion-color': isNightMode ? (['get', 'color'] as any) : '#e2e8f0',
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'min_height'],
-            'fill-extrusion-opacity': 0.92,
-          },
-        });
-      }
-    } catch (e) {
-      console.warn('CP 3D buildings setup error:', e);
+    if (!map.getLayer('cp-3d-buildings-layer')) {
+      map.addLayer({
+        id: 'cp-3d-buildings-layer',
+        type: 'fill-extrusion',
+        source: 'cp-3d-buildings',
+        paint: {
+          'fill-extrusion-color': isNightMode ? (['get', 'color'] as any) : '#e2e8f0',
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': ['get', 'min_height'],
+          'fill-extrusion-opacity': 0.92,
+        },
+      });
     }
 
     // 3. Add Safety Heat Map Continuous Gradient Raster Layer (Bilinear hardware filtered, 55% opacity)
-    try {
-      if (!map.getSource('delhi-safety-heatmap-raster')) {
-        map.addSource('delhi-safety-heatmap-raster', {
-          type: 'image',
-          url: heatmapRaster.dataUrl,
-          coordinates: heatmapRaster.coordinates,
-        });
-      }
+    if (!map.getSource('delhi-safety-heatmap-raster')) {
+      map.addSource('delhi-safety-heatmap-raster', {
+        type: 'image',
+        url: heatmapRaster.dataUrl,
+        coordinates: heatmapRaster.coordinates,
+      });
+    }
 
-      if (!map.getLayer('delhi-safety-heatmap-raster-layer')) {
-        map.addLayer(
-          {
-            id: 'delhi-safety-heatmap-raster-layer',
-            type: 'raster',
-            source: 'delhi-safety-heatmap-raster',
-            layout: {
-              visibility: currentMode === 'heatmap' ? 'visible' : 'none',
-            },
-            paint: {
-              'raster-opacity': 0.55,
-              'raster-fade-duration': 0,
-              'raster-resampling': 'linear',
-            },
+    if (!map.getLayer('delhi-safety-heatmap-raster-layer')) {
+      map.addLayer(
+        {
+          id: 'delhi-safety-heatmap-raster-layer',
+          type: 'raster',
+          source: 'delhi-safety-heatmap-raster',
+          layout: {
+            visibility: currentMode === 'heatmap' ? 'visible' : 'none',
           },
-          map.getLayer('cp-3d-buildings-layer') ? 'cp-3d-buildings-layer' : undefined
-        );
-      }
-    } catch (e) {
-      console.warn('Safety heatmap raster setup error:', e);
+          paint: {
+            'raster-opacity': 0.55,
+            'raster-fade-duration': 0,
+            'raster-resampling': 'linear',
+          },
+        },
+        map.getLayer('cp-3d-buildings-layer') ? 'cp-3d-buildings-layer' : undefined
+      );
     }
 
     // 4. Add Active Route Line Layers
-    try {
-      if (!map.getSource('route-active')) {
-        map.addSource('route-active', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            properties: {},
-            geometry: { type: 'LineString', coordinates: [] },
-          },
-        });
-      }
+    if (!map.getSource('route-active')) {
+      map.addSource('route-active', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] },
+        },
+      });
+    }
 
-      if (!map.getLayer('route-active-casing')) {
-        map.addLayer({
-          id: 'route-active-casing',
-          type: 'line',
-          source: 'route-active',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round',
-          },
-          paint: {
-            'line-color': isNightMode ? '#080a0d' : '#ffffff',
-            'line-width': 8,
-            'line-opacity': 0.95,
-          },
-        });
-      }
+    if (!map.getLayer('route-active-casing')) {
+      map.addLayer({
+        id: 'route-active-casing',
+        type: 'line',
+        source: 'route-active',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': isNightMode ? '#080a0d' : '#ffffff',
+          'line-width': 8,
+          'line-opacity': 0.95,
+        },
+      });
+    }
 
-      if (!map.getLayer('route-active-line')) {
-        map.addLayer({
-          id: 'route-active-line',
-          type: 'line',
-          source: 'route-active',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round',
-          },
-          paint: {
-            'line-color': isNightMode ? '#38bdf8' : '#ea580c',
-            'line-width': 5,
-            'line-opacity': 1,
-          },
-        });
-      }
-    } catch (e) {
-      console.warn('Active route layer setup error:', e);
+    if (!map.getLayer('route-active-line')) {
+      map.addLayer({
+        id: 'route-active-line',
+        type: 'line',
+        source: 'route-active',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': isNightMode ? '#38bdf8' : '#ea580c',
+          'line-width': 5,
+          'line-opacity': 1,
+        },
+      });
     }
 
     // 5. Add Alternative Routes Layer
-    try {
-      if (!map.getSource('routes-alt')) {
-        map.addSource('routes-alt', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] },
-        });
-      }
+    if (!map.getSource('routes-alt')) {
+      map.addSource('routes-alt', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+    }
 
-      if (!map.getLayer('routes-alt-line')) {
-        map.addLayer({
-          id: 'routes-alt-line',
-          type: 'line',
-          source: 'routes-alt',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round',
-          },
-          paint: {
-            'line-color': isNightMode ? '#424856' : '#94a3b8',
-            'line-width': 3,
-            'line-dasharray': [2, 2],
-            'line-opacity': 0.7,
-          },
-        });
-      }
-    } catch (e) {
-      console.warn('Alternative routes layer setup error:', e);
+    if (!map.getLayer('routes-alt-line')) {
+      map.addLayer({
+        id: 'routes-alt-line',
+        type: 'line',
+        source: 'routes-alt',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': isNightMode ? '#424856' : '#94a3b8',
+          'line-width': 3,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.7,
+        },
+      });
     }
 
     setMapLoaded(true);
-    try {
-      map.resize();
-    } catch {
-      // ignore
-    }
+    map.resize();
   }, [heatmapRaster]);
 
   // Update Route geometry & camera fit
@@ -439,7 +409,7 @@ export const MapViewport: React.FC = () => {
     if (!mapContainerRef.current) return;
     let isCancelled = false;
 
-    const initialStyle = mode === 'day' ? CARTO_LIGHT_STYLE : CARTO_DARK_STYLE;
+    const initialStyle = mode === 'day' ? OPENFREEMAP_LIBERTY_STYLE : OPENFREEMAP_DARK_STYLE;
     prevModeRef.current = mode;
 
     const map = new Map({
@@ -461,8 +431,17 @@ export const MapViewport: React.FC = () => {
     });
     map.addControl(navControl, 'bottom-right');
 
+    let hasFallbackTriggered = false;
     map.on('error', (e) => {
-      console.warn('Map error caught:', e?.error?.message || e);
+      const errMsg = e?.error?.message || '';
+      if (
+        !hasFallbackTriggered &&
+        (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('404'))
+      ) {
+        hasFallbackTriggered = true;
+        console.warn('Vector style fetch issue, falling back to local style');
+        map.setStyle(mode === 'day' ? FALLBACK_LIGHT_STYLE : FALLBACK_DARK_STYLE);
+      }
     });
 
     // Provide seamless 1x1 transparent fallbacks for any missing patterns/sprites
@@ -476,18 +455,6 @@ export const MapViewport: React.FC = () => {
       if (isCancelled) return;
       setupMapLayers(map, mode);
     });
-
-    // Ensure WebGL viewport resizes accurately right after mount
-    requestAnimationFrame(() => {
-      if (!isCancelled && map) {
-        map.resize();
-      }
-    });
-    const resizeTimer = setTimeout(() => {
-      if (!isCancelled && map) {
-        map.resize();
-      }
-    }, 250);
 
     // Continuous spatial heatmap interactions across expanded Delhi bounds
     const isInsideBounds = (lng: number, lat: number) =>
@@ -647,7 +614,6 @@ export const MapViewport: React.FC = () => {
 
     return () => {
       isCancelled = true;
-      clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
@@ -655,7 +621,7 @@ export const MapViewport: React.FC = () => {
     };
   }, []);
 
-  // Handle Mode Change (Morning = Clean Street Map, Night = Dark Precision Map, Heatmap = Dark Map with Raster)
+  // Handle Mode Change (Morning = Liberty Light Vector Map, Night = Dark Vector Map, Heatmap = Dark Vector Map with Raster)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
@@ -685,7 +651,7 @@ export const MapViewport: React.FC = () => {
           });
         }
       } else {
-        const targetStyle = mode === 'day' ? CARTO_LIGHT_STYLE : CARTO_DARK_STYLE;
+        const targetStyle = mode === 'day' ? OPENFREEMAP_LIBERTY_STYLE : OPENFREEMAP_DARK_STYLE;
         map.setStyle(targetStyle);
         map.once('style.load', () => {
           setupMapLayers(map, mode);
