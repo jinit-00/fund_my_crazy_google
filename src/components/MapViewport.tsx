@@ -99,6 +99,8 @@ export const MapViewport: React.FC = () => {
   const heatmapPopupRef = useRef<Popup | null>(null);
   const hoverTooltipRef = useRef<Popup | null>(null);
 
+  const isUsingFallbackRef = useRef<boolean>(false);
+
   const [mapLoaded, setMapLoaded] = useState(false);
 
   const heatmapRaster = React.useMemo(() => generateContinuousHeatmapRaster(256, 256), []);
@@ -115,8 +117,10 @@ export const MapViewport: React.FC = () => {
     setShowPOILayers,
     showWaterHutsLayer,
     setShowWaterHutsLayer,
+    activePinMode,
     setActivePinMode,
     setHeatmapStats,
+    isNavigating,
   } = useRouteStore();
 
   useEffect(() => {
@@ -263,6 +267,7 @@ export const MapViewport: React.FC = () => {
         layout: {
           'line-join': 'round',
           'line-cap': 'round',
+          visibility: isNavigating ? 'visible' : 'none',
         },
         paint: {
           'line-color': isNightMode ? '#080a0d' : '#ffffff',
@@ -280,6 +285,7 @@ export const MapViewport: React.FC = () => {
         layout: {
           'line-join': 'round',
           'line-cap': 'round',
+          visibility: isNavigating ? 'visible' : 'none',
         },
         paint: {
           'line-color': isNightMode ? '#38bdf8' : '#ea580c',
@@ -305,6 +311,7 @@ export const MapViewport: React.FC = () => {
         layout: {
           'line-join': 'round',
           'line-cap': 'round',
+          visibility: isNavigating ? 'visible' : 'none',
         },
         paint: {
           'line-color': isNightMode ? '#424856' : '#94a3b8',
@@ -317,98 +324,105 @@ export const MapViewport: React.FC = () => {
 
     setMapLoaded(true);
     map.resize();
-  }, [heatmapRaster]);
+  }, [heatmapRaster, isNavigating]);
 
   // Update Route geometry & camera fit
   const updateRouteGeometry = useCallback(
-    (map: Map, route: RouteOption | undefined, allRoutes: RouteOption[], currentMode: AppMode) => {
-      const isHeatmapMode = currentMode === 'heatmap';
+    (map: Map, route: RouteOption | undefined, allRoutes: RouteOption[], currentMode: AppMode, navigating: boolean) => {
+      if (!map || !map.isStyleLoaded()) return;
 
-      if (isHeatmapMode) {
+      try {
+        const isHeatmapMode = currentMode === 'heatmap';
+
+        // Keep route line hidden if in exploratory heatmap mode OR if user hasn't requested navigation yet
+        if (isHeatmapMode || !navigating) {
+          if (map.getLayer('route-active-line')) {
+            map.setLayoutProperty('route-active-line', 'visibility', 'none');
+          }
+          if (map.getLayer('route-active-casing')) {
+            map.setLayoutProperty('route-active-casing', 'visibility', 'none');
+          }
+          if (map.getLayer('routes-alt-line')) {
+            map.setLayoutProperty('routes-alt-line', 'visibility', 'none');
+          }
+          return;
+        }
+
         if (map.getLayer('route-active-line')) {
-          map.setLayoutProperty('route-active-line', 'visibility', 'none');
+          map.setLayoutProperty('route-active-line', 'visibility', 'visible');
         }
         if (map.getLayer('route-active-casing')) {
-          map.setLayoutProperty('route-active-casing', 'visibility', 'none');
+          map.setLayoutProperty('route-active-casing', 'visibility', 'visible');
         }
         if (map.getLayer('routes-alt-line')) {
-          map.setLayoutProperty('routes-alt-line', 'visibility', 'none');
+          map.setLayoutProperty('routes-alt-line', 'visibility', 'visible');
         }
-        return;
-      }
 
-      if (map.getLayer('route-active-line')) {
-        map.setLayoutProperty('route-active-line', 'visibility', 'visible');
-      }
-      if (map.getLayer('route-active-casing')) {
-        map.setLayoutProperty('route-active-casing', 'visibility', 'visible');
-      }
-      if (map.getLayer('routes-alt-line')) {
-        map.setLayoutProperty('routes-alt-line', 'visibility', 'visible');
-      }
+        if (!route) return;
 
-      if (!route) return;
-
-      const activeSource = map.getSource('route-active') as GeoJSONSource | undefined;
-      if (activeSource) {
-        activeSource.setData({
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: route.coordinates,
-          },
-        });
-      }
-
-      const altSource = map.getSource('routes-alt') as GeoJSONSource | undefined;
-      if (altSource) {
-        const altRoutes = allRoutes.filter((r) => r.id !== route.id);
-        altSource.setData({
-          type: 'FeatureCollection',
-          features: altRoutes.map((r) => ({
+        const activeSource = map.getSource('route-active') as GeoJSONSource | undefined;
+        if (activeSource) {
+          activeSource.setData({
             type: 'Feature',
-            properties: { id: r.id },
+            properties: {},
             geometry: {
               type: 'LineString',
-              coordinates: r.coordinates,
+              coordinates: route.coordinates,
             },
-          })),
-        });
-      }
-
-      // Dynamic color based on category and mode
-      if (map.getLayer('route-active-line')) {
-        const isNightMode = currentMode === 'night';
-        const isSafety = route.category === 'safety';
-        const routeColor = isSafety
-          ? isNightMode ? '#38bdf8' : '#0284c7'
-          : isNightMode ? '#fb923c' : '#ea580c';
-        map.setPaintProperty('route-active-line', 'line-color', routeColor);
-      }
-
-      if (map.getLayer('route-active-casing')) {
-        const isNightMode = currentMode === 'night';
-        map.setPaintProperty('route-active-casing', 'line-color', isNightMode ? '#080a0d' : '#ffffff');
-      }
-
-      // Fit camera to encompass route
-      if (route.coordinates.length >= 2) {
-        try {
-          const bounds = new LngLatBounds();
-          for (const coord of route.coordinates) {
-            bounds.extend(coord as [number, number]);
-          }
-          map.fitBounds(bounds, {
-            padding: { top: 70, bottom: 70, left: 70, right: 70 },
-            pitch: 52,
-            bearing: -15,
-            duration: 600,
-            maxZoom: 16.5,
           });
-        } catch (err) {
-          console.warn('fitBounds caught:', err);
         }
+
+        const altSource = map.getSource('routes-alt') as GeoJSONSource | undefined;
+        if (altSource) {
+          const altRoutes = allRoutes.filter((r) => r.id !== route.id);
+          altSource.setData({
+            type: 'FeatureCollection',
+            features: altRoutes.map((r) => ({
+              type: 'Feature',
+              properties: { id: r.id },
+              geometry: {
+                type: 'LineString',
+                coordinates: r.coordinates,
+              },
+            })),
+          });
+        }
+
+        // Dynamic color based on category and mode
+        if (map.getLayer('route-active-line')) {
+          const isNightMode = currentMode === 'night';
+          const isSafety = route.category === 'safety';
+          const routeColor = isSafety
+            ? isNightMode ? '#38bdf8' : '#0284c7'
+            : isNightMode ? '#fb923c' : '#ea580c';
+          map.setPaintProperty('route-active-line', 'line-color', routeColor);
+        }
+
+        if (map.getLayer('route-active-casing')) {
+          const isNightMode = currentMode === 'night';
+          map.setPaintProperty('route-active-casing', 'line-color', isNightMode ? '#080a0d' : '#ffffff');
+        }
+
+        // Fit camera to encompass route only when actively navigating
+        if (route.coordinates.length >= 2 && navigating) {
+          try {
+            const bounds = new LngLatBounds();
+            for (const coord of route.coordinates) {
+              bounds.extend(coord as [number, number]);
+            }
+            map.fitBounds(bounds, {
+              padding: { top: 70, bottom: 70, left: 70, right: 70 },
+              pitch: 52,
+              bearing: -15,
+              duration: 600,
+              maxZoom: 16.5,
+            });
+          } catch (err) {
+            console.warn('fitBounds caught:', err);
+          }
+        }
+      } catch (err) {
+        console.warn('updateRouteGeometry caught:', err);
       }
     },
     []
@@ -441,16 +455,18 @@ export const MapViewport: React.FC = () => {
     });
     map.addControl(navControl, 'bottom-right');
 
-    let hasFallbackTriggered = false;
-    const triggerFallback = () => {
-      if (hasFallbackTriggered || isCancelled) return;
-      hasFallbackTriggered = true;
+    const triggerFallback = (targetMode: AppMode) => {
+      if (isUsingFallbackRef.current || isCancelled) return;
+      isUsingFallbackRef.current = true;
       console.warn('Vector style load issue, switching to robust Esri raster style');
-      const fallbackStyle = mode === 'day' ? FALLBACK_LIGHT_STYLE : FALLBACK_DARK_STYLE;
+      const fallbackStyle = targetMode === 'day' ? FALLBACK_LIGHT_STYLE : FALLBACK_DARK_STYLE;
       map.setStyle(fallbackStyle);
       map.once('style.load', () => {
         if (!isCancelled) {
-          setupMapLayers(map, mode);
+          setupMapLayers(map, targetMode);
+          const state = useRouteStore.getState();
+          const currRoute = state.routes.find((r) => r.id === state.selectedRouteId) || state.routes[0];
+          updateRouteGeometry(map, currRoute, state.routes, targetMode, state.isNavigating);
         }
       });
     };
@@ -458,7 +474,7 @@ export const MapViewport: React.FC = () => {
     map.on('error', (e) => {
       const errMsg = e?.error?.message || '';
       if (
-        !hasFallbackTriggered &&
+        !isUsingFallbackRef.current &&
         (errMsg.includes('Failed to fetch') ||
          errMsg.includes('NetworkError') ||
          errMsg.includes('404') ||
@@ -466,7 +482,7 @@ export const MapViewport: React.FC = () => {
          errMsg.includes('ajax') ||
          errMsg.includes('cors'))
       ) {
-        triggerFallback();
+        triggerFallback(useRouteStore.getState().mode);
       }
     });
 
@@ -480,12 +496,15 @@ export const MapViewport: React.FC = () => {
     map.on('load', () => {
       if (isCancelled) return;
       setupMapLayers(map, mode);
+      const state = useRouteStore.getState();
+      const currRoute = state.routes.find((r) => r.id === state.selectedRouteId) || state.routes[0];
+      updateRouteGeometry(map, currRoute, state.routes, mode, state.isNavigating);
     });
 
     // Safety fallback timer: if vector style does not load within 4.5 seconds on deployed CDN/network, failover gracefully
     const fallbackTimer = setTimeout(() => {
-      if (!map.isStyleLoaded() && !hasFallbackTriggered) {
-        triggerFallback();
+      if (!map.isStyleLoaded() && !isUsingFallbackRef.current) {
+        triggerFallback(useRouteStore.getState().mode);
       }
     }, 4500);
 
@@ -680,14 +699,16 @@ export const MapViewport: React.FC = () => {
 
       // If transitioning between night and heatmap, both use dark style — toggle instantly without reload!
       if (wasDark && isNowDark) {
-        if (map.getLayer('delhi-safety-heatmap-raster-layer')) {
-          map.setLayoutProperty(
-            'delhi-safety-heatmap-raster-layer',
-            'visibility',
-            mode === 'heatmap' ? 'visible' : 'none'
-          );
+        if (map.isStyleLoaded()) {
+          if (map.getLayer('delhi-safety-heatmap-raster-layer')) {
+            map.setLayoutProperty(
+              'delhi-safety-heatmap-raster-layer',
+              'visibility',
+              mode === 'heatmap' ? 'visible' : 'none'
+            );
+          }
+          updateRouteGeometry(map, activeRoute, routes, mode, isNavigating);
         }
-        updateRouteGeometry(map, activeRoute, routes, mode);
         if (mode === 'heatmap') {
           map.flyTo({
             center: [77.220, 28.625],
@@ -698,46 +719,85 @@ export const MapViewport: React.FC = () => {
           });
         }
       } else {
-        const targetStyle = mode === 'day' ? OPENFREEMAP_LIBERTY_STYLE : OPENFREEMAP_DARK_STYLE;
-        map.setStyle(targetStyle);
-        map.once('style.load', () => {
-          setupMapLayers(map, mode);
-          updateRouteGeometry(map, activeRoute, routes, mode);
-          if (mode === 'heatmap') {
-            map.flyTo({
-              center: [77.220, 28.625],
-              zoom: 12.8,
-              pitch: 38,
-              bearing: -10,
-              duration: 800,
-            });
+        const targetStyle = isUsingFallbackRef.current
+          ? (isNowDark ? FALLBACK_DARK_STYLE : FALLBACK_LIGHT_STYLE)
+          : (isNowDark ? OPENFREEMAP_DARK_STYLE : OPENFREEMAP_LIBERTY_STYLE);
+
+        let styleLoaded = false;
+        let modeSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const onStyleReady = () => {
+          if (styleLoaded) return;
+          styleLoaded = true;
+          if (modeSwitchTimer) clearTimeout(modeSwitchTimer);
+
+          try {
+            setupMapLayers(map, mode);
+            updateRouteGeometry(map, activeRoute, routes, mode, isNavigating);
+            if (mode === 'heatmap') {
+              map.flyTo({
+                center: [77.220, 28.625],
+                zoom: 12.8,
+                pitch: 38,
+                bearing: -10,
+                duration: 800,
+              });
+            }
+          } catch (err) {
+            console.warn('Error setting up layers after style load:', err);
           }
-        });
+        };
+
+        if (!isUsingFallbackRef.current) {
+          modeSwitchTimer = setTimeout(() => {
+            if (!styleLoaded && !map.isStyleLoaded()) {
+              console.warn('Style load timed out on mode switch, switching to Esri fallback');
+              isUsingFallbackRef.current = true;
+              map.off('style.load', onStyleReady);
+              const fallback = isNowDark ? FALLBACK_DARK_STYLE : FALLBACK_LIGHT_STYLE;
+              map.setStyle(fallback);
+              map.once('style.load', () => {
+                setupMapLayers(map, mode);
+                updateRouteGeometry(map, activeRoute, routes, mode, isNavigating);
+              });
+            }
+          }, 3000);
+        }
+
+        map.setStyle(targetStyle);
+        map.once('style.load', onStyleReady);
       }
     }
-  }, [mode, mapLoaded, activeRoute, routes, setupMapLayers, updateRouteGeometry]);
+  }, [mode, mapLoaded, activeRoute, routes, isNavigating, setupMapLayers, updateRouteGeometry]);
 
-  // Update Route geometry & color on route change
+  // Update Route geometry & color on route change or navigation state change
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || !activeRoute) return;
-    updateRouteGeometry(map, activeRoute, routes, mode);
-  }, [activeRoute, routes, mapLoaded, mode, updateRouteGeometry]);
+    if (!map || !mapLoaded || !map.isStyleLoaded() || !activeRoute) return;
+    updateRouteGeometry(map, activeRoute, routes, mode, isNavigating);
+  }, [activeRoute, routes, mapLoaded, mode, isNavigating, updateRouteGeometry]);
 
   // Start & End HTML Markers (Clean, crisp, non-green styling)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
 
-    if (startMarkerRef.current) startMarkerRef.current.remove();
-    if (endMarkerRef.current) endMarkerRef.current.remove();
+    if (startMarkerRef.current) {
+      startMarkerRef.current.remove();
+      startMarkerRef.current = null;
+    }
+    if (endMarkerRef.current) {
+      endMarkerRef.current.remove();
+      endMarkerRef.current = null;
+    }
 
-    if (mode === 'heatmap') {
-      return; // No route markers in exploratory heatmap view
+    // Do not show start/destination markers on unrouted home page or in heatmap mode
+    if (mode === 'heatmap' || (!isNavigating && activePinMode === 'none')) {
+      return;
     }
 
     // Start marker: Morning = clean white badge with orange accent; Night = dark badge with cyan accent
-    if (startPoint) {
+    if (startPoint && (isNavigating || activePinMode === 'start')) {
       const el = document.createElement('div');
       el.className = 'flex flex-col items-center cursor-pointer';
       if (isNight) {
@@ -761,8 +821,7 @@ export const MapViewport: React.FC = () => {
     }
 
     // End marker: Morning = clean white badge with slate accent; Night = dark badge with white accent
-    if (endMarkerRef.current) endMarkerRef.current.remove();
-    if (endPoint) {
+    if (endPoint && (isNavigating || activePinMode === 'end')) {
       const el = document.createElement('div');
       el.className = 'flex flex-col items-center cursor-pointer';
       if (isNight) {
@@ -784,7 +843,7 @@ export const MapViewport: React.FC = () => {
         .setLngLat(endPoint.coordinates)
         .addTo(map);
     }
-  }, [startPoint, endPoint, mapLoaded, isNight, mode]);
+  }, [startPoint, endPoint, mapLoaded, isNight, mode, isNavigating, activePinMode]);
 
   // Render Color-Coded POI Dot Layers (Water teal, Cooling cyan, Safety blue)
   useEffect(() => {
