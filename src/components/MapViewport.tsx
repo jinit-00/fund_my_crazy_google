@@ -26,27 +26,39 @@ import { Eye, EyeOff, Droplets } from 'lucide-react';
 const OPENFREEMAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const OPENFREEMAP_DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 
-// Offline-resilient raster fallback styles
+// Zero-watermark, enterprise-grade raster fallback styles (Esri ArcGIS public CDN - 100% free, zero API key)
 const FALLBACK_DARK_STYLE: StyleSpecification = {
   version: 8,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
-    'carto-dark': {
+    'esri-dark-base': {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '&copy; CARTO &copy; OpenStreetMap contributors',
+      attribution: '&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
+    },
+    'esri-dark-ref': {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
     },
   },
   layers: [
     {
-      id: 'carto-dark-layer',
+      id: 'esri-dark-base-layer',
       type: 'raster',
-      source: 'carto-dark',
+      source: 'esri-dark-base',
+      minzoom: 0,
+      maxzoom: 20,
+    },
+    {
+      id: 'esri-dark-ref-layer',
+      type: 'raster',
+      source: 'esri-dark-ref',
       minzoom: 0,
       maxzoom: 20,
     },
@@ -55,24 +67,22 @@ const FALLBACK_DARK_STYLE: StyleSpecification = {
 
 const FALLBACK_LIGHT_STYLE: StyleSpecification = {
   version: 8,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
-    'carto-light': {
+    'esri-street-base': {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '&copy; CARTO &copy; OpenStreetMap contributors',
+      attribution: '&copy; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors',
     },
   },
   layers: [
     {
-      id: 'carto-light-layer',
+      id: 'esri-street-layer',
       type: 'raster',
-      source: 'carto-light',
+      source: 'esri-street-base',
       minzoom: 0,
       maxzoom: 20,
     },
@@ -435,7 +445,7 @@ export const MapViewport: React.FC = () => {
     const triggerFallback = () => {
       if (hasFallbackTriggered || isCancelled) return;
       hasFallbackTriggered = true;
-      console.warn('Vector style load issue, switching to robust Carto raster style');
+      console.warn('Vector style load issue, switching to robust Esri raster style');
       const fallbackStyle = mode === 'day' ? FALLBACK_LIGHT_STYLE : FALLBACK_DARK_STYLE;
       map.setStyle(fallbackStyle);
       map.once('style.load', () => {
