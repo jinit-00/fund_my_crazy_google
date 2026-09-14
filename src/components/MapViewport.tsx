@@ -432,15 +432,31 @@ export const MapViewport: React.FC = () => {
     map.addControl(navControl, 'bottom-right');
 
     let hasFallbackTriggered = false;
+    const triggerFallback = () => {
+      if (hasFallbackTriggered || isCancelled) return;
+      hasFallbackTriggered = true;
+      console.warn('Vector style load issue, switching to robust Carto raster style');
+      const fallbackStyle = mode === 'day' ? FALLBACK_LIGHT_STYLE : FALLBACK_DARK_STYLE;
+      map.setStyle(fallbackStyle);
+      map.once('style.load', () => {
+        if (!isCancelled) {
+          setupMapLayers(map, mode);
+        }
+      });
+    };
+
     map.on('error', (e) => {
       const errMsg = e?.error?.message || '';
       if (
         !hasFallbackTriggered &&
-        (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('404'))
+        (errMsg.includes('Failed to fetch') ||
+         errMsg.includes('NetworkError') ||
+         errMsg.includes('404') ||
+         errMsg.includes('403') ||
+         errMsg.includes('ajax') ||
+         errMsg.includes('cors'))
       ) {
-        hasFallbackTriggered = true;
-        console.warn('Vector style fetch issue, falling back to local style');
-        map.setStyle(mode === 'day' ? FALLBACK_LIGHT_STYLE : FALLBACK_DARK_STYLE);
+        triggerFallback();
       }
     });
 
@@ -455,6 +471,25 @@ export const MapViewport: React.FC = () => {
       if (isCancelled) return;
       setupMapLayers(map, mode);
     });
+
+    // Safety fallback timer: if vector style does not load within 4.5 seconds on deployed CDN/network, failover gracefully
+    const fallbackTimer = setTimeout(() => {
+      if (!map.isStyleLoaded() && !hasFallbackTriggered) {
+        triggerFallback();
+      }
+    }, 4500);
+
+    // Ensure WebGL viewport resizes accurately right after mount
+    requestAnimationFrame(() => {
+      if (!isCancelled && map) {
+        map.resize();
+      }
+    });
+    const resizeTimer = setTimeout(() => {
+      if (!isCancelled && map) {
+        map.resize();
+      }
+    }, 250);
 
     // Continuous spatial heatmap interactions across expanded Delhi bounds
     const isInsideBounds = (lng: number, lat: number) =>
@@ -614,6 +649,8 @@ export const MapViewport: React.FC = () => {
 
     return () => {
       isCancelled = true;
+      clearTimeout(fallbackTimer);
+      clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
