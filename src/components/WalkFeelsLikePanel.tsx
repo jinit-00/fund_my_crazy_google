@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRouteStore } from '../stores/routeStore';
+import { GeminiRouteBriefingCard } from './GeminiRouteBriefingCard';
 import {
   ChevronDown,
   ChevronUp,
@@ -139,6 +140,9 @@ export const WalkFeelsLikePanel: React.FC = () => {
           {humanSummary}
         </p>
       </div>
+
+      {/* Gemini AI Route Intelligence & Safety Co-Pilot */}
+      <GeminiRouteBriefingCard />
 
       {/* "Your Options" Section */}
       <div className={`pt-2 border-t ${isNight ? 'border-[#1d212a]' : 'border-slate-200'}`}>

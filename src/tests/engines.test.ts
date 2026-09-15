@@ -209,6 +209,26 @@ describe('Safety Heat Map Exploratory Overlay Engine', () => {
     expect(useRouteStore.getState().isNavigating).toBe(true);
     expect(useRouteStore.getState().endPoint.name).toBe('Shivaji Bridge Sector');
   });
+
+  it('generates Gemini route briefing and handles interactive route Q&A', async () => {
+    const { fetchGeminiRouteBriefing, askGeminiAboutRoute } = await import('../services/geminiService');
+    const { useRouteStore } = await import('../stores/routeStore');
+
+    const state = useRouteStore.getState();
+    const route = state.routes[0];
+
+    // Briefing generation
+    const briefing = await fetchGeminiRouteBriefing(route, 'day', 14.5, state.sunMetrics);
+    expect(briefing).toBeDefined();
+    expect(briefing.headlineQuote.length).toBeGreaterThan(5);
+    expect(briefing.briefing.length).toBeGreaterThan(20);
+    expect(briefing.advisories.length).toBeGreaterThan(0);
+
+    // Interactive Q&A
+    const answer = await askGeminiAboutRoute('Is this route safe for solo women?', route, 'night', 21.5);
+    expect(answer).toBeDefined();
+    expect(answer.length).toBeGreaterThan(15);
+  });
 });
 
 
